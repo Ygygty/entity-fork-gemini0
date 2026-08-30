@@ -1168,16 +1168,20 @@ app.post('/api/scanner/scan', (req, res) => {
   const { scanPath, recursive = true, presetId, entityType = 'audio' } = req.body;
 
   const startTime = Date.now();
-  const targetPath = scanPath || '/storage/media/audio/durus_al-alfiyyah';
+  // Map virtual paths to actual workspace storage paths
+  const virtualToRealPath = (vPath: string) => {
+    if (vPath.startsWith('/storage')) {
+      return path.resolve(process.cwd(), vPath);
+    }
+    return path.resolve(process.cwd(), 'storage', vPath.replace(/^\//, ''));
+  };
 
-  // Check if real local directory exists or if we should scan actual files in workspace
-  let realFiles: Array<{ name: string; fullPath: string; size: number }> = [];
+  const targetPath = scanPath ? virtualToRealPath(scanPath) : path.resolve(process.cwd(), 'storage/media/audio/durus_al-alfiyyah');
+
+  // Check if real local directory exists and scan actual files
+  let realFiles: Array<{ name: string; fullPath: string; size: number; ext: string }> = [];
   try {
-    const resolvedPath = path.resolve(
-      process.cwd(),
-      targetPath.startsWith('/') ? targetPath.slice(1) : targetPath
-    );
-    if (fs.existsSync(resolvedPath) && fs.statSync(resolvedPath).isDirectory()) {
+    if (fs.existsSync(targetPath) && fs.statSync(targetPath).isDirectory()) {
       const readDirRecursive = (dir: string) => {
         const entries = fs.readdirSync(dir, { withFileTypes: true });
         for (const entry of entries) {
@@ -1186,14 +1190,19 @@ app.post('/api/scanner/scan', (req, res) => {
             readDirRecursive(full);
           } else if (entry.isFile()) {
             const stat = fs.statSync(full);
-            realFiles.push({ name: entry.name, fullPath: full, size: stat.size });
+            const ext = path.extname(entry.name).toLowerCase().replace('.', '');
+            realFiles.push({ name: entry.name, fullPath: full, size: stat.size, ext });
           }
         }
       };
-      readDirRecursive(resolvedPath);
+      readDirRecursive(targetPath);
+
+      console.log(`[Scanner] Found ${realFiles.length} real files in ${targetPath}`);
+    } else {
+      console.log(`[Scanner] Path does not exist or is not a directory: ${targetPath}`);
     }
   } catch (e) {
-    // Fallback to simulated media storage scan
+    console.error('[Scanner] Error scanning path:', e);
   }
 
   // File extension to category & MIME mapping helper
@@ -1350,7 +1359,17 @@ app.post('/api/scanner/scan', (req, res) => {
     ],
   };
 
-  const selectedList = mockFilesMap[entityType] || mockFilesMap.audio;
+  // Use real files if found, otherwise fall back to mock data
+  const selectedList = realFiles.length > 0 
+    ? realFiles.map((f) => ({
+        name: f.name,
+        relPath: path.relative(targetPath, f.fullPath),
+        size: f.size,
+        title: f.name.replace(/\.[^/.]+$/, ''), // Remove extension for title
+        hierarchy: [path.basename(path.dirname(f.fullPath)), f.name],
+        nodeType: entityType === 'manuscript' ? 'folio' : entityType === 'book' ? 'chapter' : 'track',
+      }))
+    : (mockFilesMap[entityType] || mockFilesMap.audio);
 
   const scannedFiles = selectedList.map((item, idx) => {
     const meta = getCategoryAndMime(item.name);
