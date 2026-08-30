@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  # 1. Entity Platform Fullstack App (Node.js + Vite + Express)
+  entity-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: entity_platform_app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=postgresql://entity_user:entity_password@postgres:5432/entity_db
+      - STORAGE_ROOT=/app/storage
+    volumes:
+      - ./storage:/app/storage
+      - ./database_store.json:/app/database_store.json
+    depends_on:
+      - postgres
+
+  # 2. PostgreSQL Relational Database Engine
+  postgres:
+    image: postgres:16-alpine
+    container_name: entity_postgres_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: entity_user
+      POSTGRES_PASSWORD: entity_password
+      POSTGRES_DB: entity_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+  # 3. Optional pgAdmin Web Interface for Database Management
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: entity_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@entity.local
+      PGADMIN_DEFAULT_PASSWORD: admin_password
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+
+volumes:
+  postgres_data:
+    driver: local

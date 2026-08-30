@@ -1,0 +1,6 @@
+{
+  "name": "Entity - Digital Humanities & Asset Management",
+  "description": "A state-of-the-art digital library, scholarly asset management platform, and unified multi-pane research studio for manuscripts, books, audio, and video.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
